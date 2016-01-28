@@ -1,0 +1,946 @@
+import procontroll.*;
+import net.java.games.input.*;
+import processing.net.*; 
+
+Client myClient;
+ControllIO controllIO;
+ControllDevice ControlJuego;
+ControllSlider ejey1;    //Pad Izquierda
+ControllSlider ejex1;    //Pad Izquierda
+ControllSlider ejey2;    //Pad Derecho 
+ControllSlider ejex2;    //Pad Derecho
+ControllSlider gatillos;
+ControllCoolieHat dpad;
+ControllButton buttonA;    // Abrir garra
+ControllButton buttonB;    //Cerrar Garra a consideración de conexión de garra
+ControllButton buttonX;    //Calibración de sensores
+ControllButton buttonY;    //Pedir datos de sensores
+ControllButton botPalDer;   // Presionar Palanca Derecha - Succionar
+ControllButton botPalIz;    // Presionar Palanca Izquierda - Bomba
+
+/////////////switch//////////// Interfaz 1 = Movimientos rectos, Interfaz 2 = Navegación.
+int switcheo = 1;      //Cambio de interfaz, default interfaz de movimientos rectos
+/////////////Recepción de datos////////
+int datain;
+//////////VarGarra////////////
+int enabled = 0;         //Enabled 1, Disabled 0
+int sentido = 0;         // abrir = 1, cerrar =0
+////////////////// Variables de lectura del control ////////////////////////
+float y1=0;
+float x1=0;
+float y2=0;
+float x2=0;
+float gatillo=0;
+///////////////// Conversión de Float a Int para el Ethernet ////////////////////////
+int newy1;
+int newx1;
+int newy2;
+int newx2;
+int newgatillo;
+int dataIn;
+////////////////cambio garra-camara///////////////////////////7
+boolean camclaw = false;
+////////////////  indicadores de motor ////////////////////////
+// motores para movimientos e x/y laterales 45°
+char let1 = 'a';       
+char let2 = 'b';
+char let3 = 'c';
+char let4 = 'd';
+// motores para movimientos en z
+char let5 = 'e';
+char let6 = 'f';
+char let7 = 'g';
+char let8 = 'h';
+// Indicadoes para la garra
+char let9 = 'i';
+char let10 = 'j';
+
+// Indicaciones para el succionador y la bomba
+char enableB = 'r';
+int bomb = 0;  //enable del succionador  1 = prendido, 0 = apagado
+//char indDirB = 't';
+int dirB = 0;  // 0 = succionar, 1= bomba 
+
+// Indicadores de rotar la garra
+char enableR = 'q';  //enable de girar  1= prendido, 0 = apagado
+int eR = 0;
+//char dircc= 'r'; // a que direccion, 1 = derecha , 0 = izquierda
+int dL = 0;
+// Indicadores para la camara
+char camx = 'z';      //Valor neutro no entra a ningun estado, camy y camx adquieren
+char camy = 'z';      // 'k' y 'l' donde 'k' es el movimiento vertical y 'l' es el movimiento horizontal
+// Indicador para el sensor de profundidad
+char senp = 'o';
+char leer = 'p';
+/////////////// datos temporales de validacion////
+int tempy1;
+int tempx1;
+int tempy2;
+int tempx2;
+int tempgatillo;
+//////////////// datos velocidades finales de transmicion ////
+int ma;
+int mb;
+int mc;
+int md;
+int me;
+int mf;
+int mg;
+int mh;
+/////////////  Datos ethernet de garra  /////////////////
+int mi;      //Enable 1, Disable 0
+int mj;      //Dirección abre 1, Cerrar 0
+///////////  Datos anteriores de validación de transmisión ethernet ///////////
+int xma=0;
+int xmb=0;
+int xmc=0;
+int xmd=0;
+int xme=0;
+int xmf=0;
+int xmg=0;
+int xmh=0;
+////////////////////// Variables de sensores   /////////////////
+int tempint = 0;    //Temperatura interna
+int tempext = 0;    //Temperatura externa
+int alt = 0;        //Altitud
+int pr = 0;         //Presión
+int pab=0;          //Presión absoluta
+int xacel=0;        //Aceleración en X
+int humedad;        //Humedad
+int kilosd=0;       //Muchos delays al menos 5s
+/////////////////////////////Imprime los valores de los motores/////////////////
+
+void mostrarMotores()    //////  Visualiación de valores de motores   ///////
+{
+ text("ma"+ma,500,600);
+ text("mb"+mb,550,600);
+ text("mc"+mc,600,600);
+ text("md"+md,650,600);
+ text("me"+me,500,650);
+ text("mf"+mf,550,650);
+ text("mg"+mg,600,650);
+ text("mh"+mh,650,650);
+}
+
+void setup()
+{
+ size(800,800);      //Tamaño de pantalla
+ ///////////// conectar con dispositivo/////////////////////////////
+  controllIO = ControllIO.getInstance(this);
+  controllIO.printDevices();
+  ControlJuego=controllIO.getDevice(2);            //El número de dispositivo asignado por la PC, generalmente 2 para Joypad
+  println(ControlJuego.getName()+"tiene:");
+  println("" + ControlJuego.getNumberOfButtons() + "botones");
+  ControlJuego.printButtons();   
+  
+  //////////////////////  Asginación de botones e interfaces a las variable de cntrol  ///////////////////////////////////
+  ejey1= ControlJuego.getSlider(0);
+  ejey1.setTolerance(0.05f);
+  ejex1= ControlJuego.getSlider(1);
+  ejex1.setTolerance(0.05f);
+  ejey2= ControlJuego.getSlider(2);
+  ejey2.setTolerance(0.05f);
+  ejex2= ControlJuego.getSlider(3);
+  ejex2.setTolerance(0.05f);
+  gatillos= ControlJuego.getSlider(4);
+  gatillos.setTolerance(0.05f);
+  myClient = new Client(this, "192.168.1.2", 23);
+  
+  ////////////////  Boton cambio de interfaz  ////////////////////      Genera métodos
+  ControlJuego.plug(this, "PresBoton4", ControllIO.ON_PRESS,4);      
+  ControlJuego.plug(this, "PresBoton5", ControllIO.ON_PRESS,5);
+  
+  /////////////////  Boton cambio interfaz garra-camara   //////////////////
+  ControlJuego.plug(this, "PresBoton6", ControllIO.ON_PRESS,6); // back
+  
+  ///////////////  Asgnación de Botones Garra/////////////////////////
+  ControlJuego.plug(this, "PresBoton0", ControllIO.ON_PRESS,0);      //Abrir Garra
+  ControlJuego.plug(this, "PresBoton1", ControllIO.ON_PRESS,1);      //Cerrar garra
+  ControlJuego.plug(this, "PresBoton3", ControllIO.ON_PRESS,3);      //Pedir datos de sennsores
+  buttonA = ControlJuego.getButton(0);
+  buttonB =  ControlJuego.getButton(1);
+  buttonX = ControlJuego.getButton(2);
+  buttonY = ControlJuego.getButton(3);
+  //((((((((((bomba-suc)))))))))))))))))
+  botPalDer = ControlJuego.getButton(9); 
+  botPalIz = ControlJuego.getButton(8);
+  
+  ///////////////Camara//////////////////////////////
+  dpad = ControlJuego.getCoolieHat(10);
+}
+
+
+void girarGarra(){
+  
+if(dpad.getX() != 0)
+  {
+    eR = 1; //prendido
+    
+    if(dpad.getX() > 0){      
+      dL = 1;           //Mover derecha
+      myClient.write(enableR);
+      myClient.write(eR);
+     // myClient.write(dircc);
+      myClient.write(dL);
+    } 
+    else {
+      dL = 0;           //Mover izquierda
+      
+      myClient.write(enableR);
+      myClient.write(eR);
+      //myClient.write(dircc);
+      myClient.write(dL);
+    }
+  }
+  else {eR = 0;          //No mover
+  
+   myClient.write(enableR);
+   myClient.write(eR);
+  }
+}
+
+void camarax()    //Genera movimiento en X de la cámara
+{
+  if(dpad.getX() != 0)
+  {
+    if(dpad.getX() > 0){      
+      camx = 'k';           //Mover derecha
+    } 
+    else {
+      camx = 'l';           //Mover izquierda
+    }
+  }
+  else camx = 'z';          //No mover
+}
+
+void camaray()      //Genera mvimiento de cámara en Y
+{
+ if(dpad.getY() != 0)
+  {
+    if(dpad.getY() > 0){
+      camy = 'n';                //Mover arriba
+    }
+    else {
+      camy = 'm';                //Mover hacia abajo
+    }
+    /*whie (myClient.available <= 0){
+        }
+        datain=myClient.read();    //Recibir información del aceerpmetro
+        if (datain == 102){
+           xacel = myClient.read();
+        }*/
+  }
+  else camy = 'z';               //No mover
+}
+
+/////////   Asigna los valores temmporales en Y, Controla movimmiento en Z de todo el robot. Pad 2  y Gatillos ////////////////
+void movimientoZ()                      
+{
+    /////////////////  Asignación de pad 2 vertical. Inclinación de la vista del robot //////////////////////////////  
+    if ( newy2<120 && newy2>70) {        //Caso centro, evita números random cerca del centro del pad
+      tempy2=90;
+    }
+    else if(newy2>160){                //Evita el caso de velocidad máxima
+      tempy2=160;
+    }
+    else if (newy2<30){                //Evita el caso de velocidad minima
+      tempy2=30;
+    }
+    else {
+       tempy2=newy2;
+    }
+    //////////////// Asignación de gatillos. Subir y bajar robot completo /////////////////////////
+    if (newgatillo>160) {              //Evita el caso de velocidad máximo
+      tempgatillo=160;
+    }
+    else if (newgatillo<30){            //Evita el caso de velocidad mínimo
+      tempgatillo=30;
+    }
+    else{
+     tempgatillo=newgatillo; 
+    }
+    ///////////////// Si los gatillos se mueven se le da preferencia a los gatillos   /////////////////
+    if(tempgatillo!=90){      //Si algun gatillo es presionado
+       me=tempgatillo;       // Motores E, F, G y H se les asigna directamente el valor del pad del gatillo
+       mf=tempgatillo;
+       mg=tempgatillo;
+       mh=tempgatillo;
+    }
+    else {              //Considera el pad derecho previamente actualizada la variabe tempy2
+       me=tempy2;       //Motores E, F, G y H se les asigna directamente el valor del pad derecho
+       mf=tempy2;       //Si nada es presinado ni movido, el valor guardado siempre es 90
+       mg=180-tempy2;
+       mh=180-tempy2; 
+    }
+}
+
+// Asugnaa vlaores temporales en x, controla los movimientos de rotacion, emplea el pad 2 (derecho)
+void rotar()
+{
+  // Asignacion del pad 2 horizontal, movimientos de rotacion izuierda y derecha
+  tempx2=newx2;
+  
+       if ( newx2<120 && newx2>70)  // caso de valores en rango central, evita mandar estos valores y mantiene estaticos los motores
+            {
+            tempx2=90;
+            }
+            
+            else if(newx2>160) // caso limite superior, evita que los valores sobrepasen este valor superior
+            {
+             tempx2=160 ;
+            }
+            
+            else if (newx2<30) // caso limite inferior, evita que los valores sean menores a este limite
+            {
+             tempx2=30 ;
+            }
+            
+            else  // escribe el numero tal cual se lee si no entro en ninguno de los casos anteriores
+            {
+               tempx2=newx2;
+            }
+            
+  /*if(tempy1 != 90){
+    me =180 - tempy1;
+    mf = 180 - tempy1;
+  }*/
+ 
+ // se mandan los valores a los motores que se encargan del movimiento en X y Y, para generar el movimiento de rotacion
+  ma=tempx2;
+  mb=180-tempx2;
+  mc=tempx2;
+  md=180-tempx2;
+   
+}
+// metodo para los movimientos en diagonal, emplea el pad 1 para controlar los cuatro motores
+void diagonal()
+{
+  
+          // limites
+            if (newx1<115 && newx1>70) // limite de rango central, los valores dentro de este rango se cambiaran por 90
+            {
+            tempx1=90;
+            }
+            else if(newx1>160 ) // limite superior, los valores que revasen este limite seran remplazados por 160
+            {
+              tempx1=160;
+            }
+            else if(newx1<30 ) // limite inferior, los valores que esten bajo este limite seran remplazados por 30
+            {
+              tempx1=30;
+            }
+            else // si los valores no estan en alguno de los rangos anteriores, se envia el dato de tempx1 tal cual se procesa de la palanca
+            {
+              tempx1=newx1;
+            }
+            
+            if(newy1<115 && newy1>70)// limite central, los valores dentro de este rango se reemplazan por 90
+            {
+              tempy1=90;
+            }
+            else if(newy1<30)// limite inferior, los valores por debajo de 30 se reemplazan por 30
+            {
+              tempy1=30;
+            }
+            else if (newy1>160) // limite superior, los valores por encima de 160, se cambian por 160
+            {
+              tempy1=160;
+            }
+            else // si los valores no estan en esos rangos, el valor porcesado de la palanca se emplea tal cual 
+            {
+               tempy1=newy1;
+            }
+            
+            
+       
+            
+            // generacion de velocidades ( movimientos ) orientados en angulos dentro del primer cuadrante en el plano x y y
+            if( tempx1 >90 && tempy1 >= 90 )
+            {
+              
+              // movimiento en angulos entre 90° y 45°
+              if( tempy1>tempx1 )
+              {
+                fill(50,1000,50);
+                
+                ma=tempy1-(tempx1-90);
+                mb=tempy1;
+                mc=tempy1-(tempx1-90);
+                md=tempy1;
+                mostrarMotores();
+
+              }
+              
+              else // movimiento en angulos entre 45° y 0°
+              {
+                fill(80,80,80);
+                ma=180-(tempx1-(tempy1-90));
+                mb=tempx1;
+                mc=(180-tempx1)+(tempy1-90);
+                md=tempx1;
+       
+                mostrarMotores();
+             
+              }
+            }
+            
+            
+            // generacion de los movimmientos en el segundo cuadrante del plano xy        
+            if( tempx1 <= 90 && tempy1 >90 )
+            {
+              
+              if(newy1 >(180-newx1)) // movimientos de angulos entre 90° y 135°
+              {
+                ma=tempy1;
+                mb=(tempy1-(90-tempx1));
+                mc=tempy1;
+                md=tempy1-(90-tempx1);;
+                mostrarMotores();
+              }
+              else // movimientos entre los angulos 135° y 180°
+              {
+                fill(50,200,65);
+                ma=180-tempx1;
+                mb=tempx1+(tempy1-90);
+                mc=180-tempx1;
+                md=tempx1+(tempy1-90);
+                mostrarMotores();
+                
+              
+              }
+            }
+            
+            
+            
+            // generacion de los movimientos en el tercer cuadrante del plano xy       
+            if( tempx1 <90 && tempy1<= 90 )
+            { 
+              
+               if(tempx1<tempy1) // movimientos en angulos entre 180° y 225°
+                {
+                  fill(50,100,200);
+                  ma=(180-tempx1)-(90-tempy1);
+                  mb=tempx1;
+                  mc=(180-tempx1)-(90-tempy1);
+                  md=tempx1;
+                  mostrarMotores();
+                  
+                }
+                else // movimientos en angulos entre 225° y 270°
+                  {
+                    fill(9,25,255);
+                    ma=(90-tempx1)+tempy1;
+                    mb=tempy1;
+                    mc=(90-tempx1)+tempy1;
+                    md=tempy1;
+                    mostrarMotores();
+                    
+                    
+                  }
+              
+            }
+            
+            
+        // generacion de movimientos con angulos en el cuarto cuadrante del plano xy      
+            if( tempx1 >= 90 && tempy1 <90 )
+            {
+              if(tempx1<(180-tempy1)) // movimientos entre los angulos 270° y 315°
+                {
+                  fill(79,79,5);
+                  ma=tempy1;
+                  mb=tempy1+(tempx1-90);
+                  mc=tempy1;
+                  md=tempy1+(tempx1-90);
+                  mostrarMotores();
+                }
+                else // movimientos entre los angulos 315° y 360°
+                  {
+                    fill(230,25,100);
+                    ma=180-tempx1;
+                    mb=tempx1-(90-tempy1);
+                    mc=180-tempx1;
+                    md=tempx1-(90-tempy1);
+                    mostrarMotores();
+                  }
+            }
+}
+
+// esta es la segunda interfaz de control, en esta solo se usan dos motores (C y D) para movimientos de atras y adelante, y los motores A y B se usan para cambiar la direcion (girar)
+void caracolito()  
+{
+  // Se validan los valores para los motores A y B, para obtener estos valores se emplea el pad 2 (derecho)
+  
+            if ( newx2<120 && newx2>70) // caso centro, se filtran los valores del rango central para mentener estatico el rov
+            {
+               tempx2=90;
+            }
+            else if(newx2>150) // caso limite superior, se evita asignar valores superiores al valor del limite
+            {
+              tempx2=150;
+            }
+            else if(newx2<40) // caso limite inferior, se evita asignar valores inferiores al valor del limite
+            {
+              tempx2=40;
+            }
+            else  // se usan los valores que indica la palanca
+            {
+               tempx2=newx2;
+            }
+            
+  // se validan los valores para los motores C y D, para estos valores se emplea el pad 1 (izquierdo)
+  
+            if ( newy1<120 && newy1>70) // caso centro, filtra los valores del rango central y los convierte a 90
+            {
+               tempy1=90;
+            }
+            else if(newy1>150) // caso limite superior, evita asignar valores mayores al limite 
+            {
+              tempy1=140;
+            }
+            else if (newy1<30) // caso limite inferior, evita asignar valores menores a ese limite
+            {
+             tempy1=30; 
+            }
+            else // si el valor no pertenece a las validaciones anteriores, se manda el valor que indica el pad1
+            {
+             tempy1=newy1; 
+            }
+            
+           
+     //     B /       \A
+     //       
+     //     C \       /D
+         
+            
+  ma=180-tempx2;
+  mb=tempx2;
+  mc=tempy1;
+  md=tempy1; 
+   
+   
+}
+
+//------------cambio de interfaz de control---------------
+void PresBoton4() // si se presiona el boton 4 se cambia a la interfaz de control 1
+{
+    switcheo = 0;  
+}
+
+void PresBoton5() // si se presiona el boton 5 se cambia a la interfaz de control 2
+{
+  switcheo =1;
+}
+
+//-------------botones de control de la garra---------------------------
+
+void PresBoton0() // si se presiona el boton A, la garra se abre
+{
+  sentido = 1;
+  
+}
+
+void PresBoton1() // si se presiona el boton B, la garra se cierra
+{
+  sentido = 0;
+}
+
+
+//  Recepcion de datos de sensores
+void PresBoton3()
+{
+       myClient.write(leer);    // se envia una instruccion al arduino
+       datain = myClient.read(); // se lee los datos solicitados
+       text(datain,600,550); // se escribe en pantalla los datos
+   
+       if(datain==-1)  // si el buffer esta vacio, se vuelve a pedir el dato
+          {
+            datain = myClient.read();
+          }
+     
+        else   
+          {
+               text (datain, 500,550); // se escribe el dato en pantalla
+               switch(datain)
+                 {
+  
+                   case 97: // si el dato es A, es el caso de temperatura interna
+                   tempint = myClient.read();
+                   fill(0);
+                   
+                   break;
+              
+                   case 98: // si el dato es B, es el caso de temperatura externa
+                   tempext = myClient.read();
+                   break;
+    
+                   case 99: // si el dat es C, es el caso de altitud
+                   alt = myClient.read();
+                   break;
+    
+                   case 100: // si el dato es D, es el caso de presion relativa
+                   pr = myClient.read();
+                   break;
+    
+                   case 101: // si el dato es E, es el caso presion abslouta
+                   pab = myClient.read();
+                   break;
+                   
+                   case 103: // si el dato es F, es el caso de humedad
+                   humedad=myClient.read();
+                   break;
+                 
+                 
+                   
+                   
+                 }
+                        leer='z';
+           }
+          
+}
+
+//--------------------------boton cambio interfaz garra-camara------------------
+void PresBoton6()
+{
+  camclaw = !camclaw;
+}
+
+
+//    Calibracion del sensor de profundidad
+
+void SensorProf()
+{
+  ///////RECORDAR QUE HAY QUE APRETAR X para calibrar
+  if(buttonX.pressed())
+  {
+    myClient.write(senp);
+    myClient.clear();
+  }
+  else return;
+}
+//-------------leer sensores--------
+/*void lecturasens ()
+
+{
+   if(buttonY.pressed())
+     {
+       myClient.write(leer);   
+       datain = myClient.read();
+       text(datain,600,550);
+        if(datain==-1)
+          {
+            datain = myClient.read();
+          }
+        else
+          {
+               text (datain, 500,550);
+               switch(datain)
+                 {
+  
+                   case 97: 
+                   tempint = myClient.read();
+                   fill(0);
+                   
+                   break;
+              
+                   case 98:
+                   tempext = myClient.read();
+                   break;
+    
+                   case 99: 
+                   alt = myClient.read();
+                   break;
+    
+                   case 100: 
+                   pr = myClient.read();
+                   break;
+    
+                   case 101: 
+                   pab = myClient.read();
+                   break;
+
+                }
+          }
+      }
+ 
+ 
+ else return;
+}
+*/
+void draw()
+
+{
+  
+  
+  background(255);
+  y1=((ejey1.getValue()*-1)+1)*90;  // conversion de float a int de la variable y1
+  x1=(ejex1.getValue()+1)*90;       // conversion de float a int de la variable x1
+  y2=((ejey2.getValue()*-1)+1)*90;  // conversion de float a int de la variable y2
+  x2=(ejex2.getValue()+1)*90;       // conversuon de float a int de la variable x2
+  gatillo=(gatillos.getValue()+1)*90; // conversion de float a int de la variable gatillos
+  
+ 
+  // se guardan los valores int en nuevas variables
+  newy1=int(y1);   
+  newx1=int(x1);
+  newy2=int(y2);
+  newx2=int(x2);
+  newgatillo=int(gatillo);
+  
+  // sentido del giro del motor de l garra 
+  mj = sentido;
+  
+  // si el boton A (abrir) o B (cerrar) estan presionados, se manda voltaje al enable del puente H para ejecutar la accion
+  if(buttonA.pressed() || buttonB.pressed())
+ 
+       { 
+         enabled =1;
+       }
+   else enabled = 0;
+   // este es el dato que indica el estado del enable
+   mi = enabled;
+   text("enabled = " + enabled, 25,525);
+
+   
+   
+ ///////////////////////////////////SUCCIONADOR-BOMBA//////////////////////
+ 
+ 
+ if ((botPalDer.pressed()) ||(botPalIz.pressed()))
+ {
+   bomb = 1;  //indica que el enable de la bomba esta prendido
+   if((botPalDer.pressed())) dirB= 0;   // succiona
+   else dirB= 1;   //bomba
+   
+ }
+ else bomb = 0;   //enable de la bomba esta apagado
+ 
+ //---------------------------bomba--------------
+
+ 
+ 
+ 
+  ////////////////////////// control principal //////////////////////////////////////////
+  
+  // si se selecciona la interfaz 1, se ejecutan los metodos siguientes
+  if (switcheo == 1)
+  {
+    // metodos que se emplean para controlar el rov
+    movimientoZ(); 
+    rotar();
+    diagonal();
+    SensorProf();
+   // lecturasens();
+   
+   if(!camclaw){
+    camarax();
+    camaray();
+      }
+  
+  else girarGarra();
+ 
+  }
+  // si se selecciona la segunda interfaz, se ejecutan los metodos siguiente 
+  else 
+  {
+    // metodos que se emplean para controlar el rov
+    caracolito();
+    movimientoZ();
+    SensorProf();
+  // lecturasens();
+  
+    if(!camclaw){
+    camarax();
+    camaray();
+      }
+  
+  else girarGarra();
+ 
+  }
+// delay inicial, solo se ejecuta una vez, en la primera iteracion
+while (kilosd==0)
+{
+  delay (5000) ;
+  kilosd=1; // al cambiar la variable a 1, la siguiente vez que se ejecuta el codigo, ya no hay delay de 50000
+}
+
+
+//validacion de si el valor anterior de d, es igual al nuevo
+
+if (xma==ma) // si es igual se actualiza la variable que compara la iteracion anterior y no se envia al motor
+{
+ xma=ma; 
+}
+
+else  // si es distinta al valor anterior, se envia el idicador de motor y la velocidad que corresponde
+{
+ //A
+  myClient.write(let1);
+  myClient.write(ma);
+  xma=ma;
+}
+/////////////////////////////////////////////////////////////////////////////////////////////
+if (xmb==mb) // validacion de si el valor actual es igual al valor anterior
+{
+ xmb=mb; // si es igual, el valor acutal ahora sera el valor anterior y no se envia
+}
+
+else // si es distitno el valor acutal al anterior se envia el indicador y la velocidad correspondiente
+{
+  //B
+  myClient.write(let2);
+   myClient.write(mb);
+  xmb=mb;
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////
+if (xmc==mc)// validacion de si el valor actual es igual al valor anterior
+{
+ xmc=mc; // si es igual, el valor acutal ahora sera el valor anterior y no se envia
+}
+
+else // si es distitno el valor acutal al anterior se envia el indicador y la velocidad correspondiente
+{
+ //C
+  myClient.write(let3);
+  myClient.write(mc);
+  xmc=mc;
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////
+if (xmd==md)// validacion de si el valor actual es igual al valor anterior
+{
+ xmd=md; // si es igual, el valor acutal ahora sera el valor anterior y no se envia
+}
+
+else // si es distitno el valor acutal al anterior se envia el indicador y la velocidad correspondiente
+{
+  //D
+  myClient.write(let4);
+  myClient.write(md);
+  xmd=md;
+
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////
+if (xme==me)// validacion de si el valor actual es igual al valor anterior
+{
+ xme=me; // si es igual, el valor acutal ahora sera el valor anterior y no se envia
+}
+
+else // si es distitno el valor acutal al anterior se envia el indicador y la velocidad correspondiente
+{
+  //E
+  myClient.write(let5);
+  myClient.write(me);
+  xme=me;
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+if (xmh==mh)// validacion de si el valor actual es igual al valor anterior
+{
+ xmh=mh; // si es igual, el valor acutal ahora sera el valor anterior y no se envia
+}
+
+else // si es distitno el valor acutal al anterior se envia el indicador y la velocidad correspondiente
+{
+  //F
+  myClient.write(let6);
+  myClient.write(mh);
+  xmh=mh;
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+if (xmg==mg)// validacion de si el valor actual es igual al valor anterior
+{
+ xmg=mg; // si es igual, el valor acutal ahora sera el valor anterior y no se envia
+}
+
+else // si es distitno el valor acutal al anterior se envia el indicador y la velocidad correspondiente
+{
+  //G
+  myClient.write(let7);
+  myClient.write(mg);
+  xmg=mg;
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////////7  
+ if (xmf==mf)// validacion de si el valor actual es igual al valor anterior
+{
+ xmf=mf; // si es igual, el valor acutal ahora sera el valor anterior y no se envia
+}
+
+else // si es distitno el valor acutal al anterior se envia el indicador y la velocidad correspondiente
+{
+  //H
+  myClient.write(let8);
+  myClient.write(mf);
+  xmf=mf;
+}
+
+// indicador y datos para motores de garra y camara
+ 
+  //I
+  myClient.write(let9);
+  myClient.write(mi);
+  //J
+  myClient.write(let10);
+  myClient.write(mj);
+  delay(60);
+  //camx
+  myClient.write(camx);
+  //camy
+  myClient.write(camy);
+  //enableBomba
+  myClient.write(enableB);
+  //indica prendido
+  myClient.write(bomb);
+  //indicador direccion bomba
+  myClient.write(dirB);
+  //indica direccion
+  // textos y dibujos para mostrar en pantalla los comportamientos de los motores
+  
+ellipse(100,200+ma,100,100);
+ellipse(300,200+mb,100,100);
+ellipse(500,200+mc,100,100);
+ellipse(700,200+md,100,100);  
+
+ellipse(100,100,100,me);
+ellipse(300,100,100,mf);
+ellipse(500,100,mg,100);
+ellipse(700,100,mh,100);
+fill(0);
+text ("ma= " + ma,100,500);
+text ("mb= " + mb,300,500);
+text ("mc= " + mc,500,500);
+text ("md= " + md,700,500);
+text ("me= " + me,100,550);
+text ("mf= " + mf,300,550);
+text ("mg= " + mg,500,550);
+text ("mh= " + mh,700,550);
+text ("humed"+humedad,700,600);
+if (!(myClient.available() > 0)) text("ÑOOOOOOO",25,600);
+
+////////////////////cositoKawaidesu
+
+
+
+
+ 
+text("camclaw = " + camclaw, 500,13);
+
+text("temp interna = " + tempint, 200,600);
+text("temp externa = " + tempext, 200,625);
+ text("altitud = " + alt, 200,650);
+  text("presion relativa = " + pr, 200,675);
+  text("presion absoluta = " + pab, 200,700);
+
+//text(datain,100,550);
+//////////////////////////Indicadores Garra//////////////////////
+
+
+//text("camX = "+ camx, 100,525);
+//text("camY = "+ camy, 100,550);
+//text("mi" + enabled, 100,525);
+//text ( "sentido" + sentido, 100,600);
+//text (prueba, 100,550);
+ellipse(newx1,newy1,30,30);
+ellipse(newx1+200,newy1+1,30,30);
+
+}
+///mmbhaaaaaa 
+///mmmbhaaaaa |><|
+///////////////////AREA DE BOTONES////////////////////////////////
